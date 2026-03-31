@@ -13,15 +13,8 @@ const BLOB_KEY = process.env.EMBR_BLOB_KEY || "";
 
 /** Build the absolute data-plane URL for a blob operation. */
 function blobUrl(req, path) {
-  // The frontend sends its own origin via X-Public-Origin because
-  // x-forwarded-host points at the internal ADC sandbox, not the public
-  // Embr domain that routes through Yarp.
-  const appUrl = process.env.EMBR_APP_URL
-    || req.headers["x-public-origin"]
-    || req.headers.origin
-    || extractOrigin(req.headers.referer)
-    || `${req.headers["x-forwarded-proto"] || req.protocol}://${req.headers["x-forwarded-host"] || req.get("host")}`;
-
+  // TEMPORARY: hardcoded for debugging — remove once origin discovery is fixed
+  const appUrl = "https://production-blob-client-2dc742c9.sterns.app.embr-test.windows-int.net";
   return `${appUrl}/_embr/blob/${path ?? ""}`;
 }
 
