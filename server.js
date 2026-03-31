@@ -14,7 +14,7 @@ const BLOB_KEY = process.env.EMBR_BLOB_KEY || "";
 /** Build the absolute data-plane URL for a blob operation. */
 function blobUrl(req, path) {
   // TEMPORARY: hardcoded for debugging — remove once origin discovery is fixed
-  const appUrl = "https://production-blob-client-2dc742c9.sterns.app.embr-test.windows-int.net";
+  const appUrl = "https://production-blob-client-80d23f45.sterns.app.embr-test.windows-int.net";
   return `${appUrl}/_embr/blob/${path ?? ""}`;
 }
 
