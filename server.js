@@ -13,9 +13,22 @@ const BLOB_KEY = process.env.EMBR_BLOB_KEY || "";
 
 /** Build the absolute data-plane URL for a blob operation. */
 function blobUrl(req, path) {
-  const proto = req.headers["x-forwarded-proto"] || req.protocol;
-  const host = req.headers["x-forwarded-host"] || req.get("host");
-  return `${proto}://${host}/_embr/blob/${path ?? ""}`;
+  // The public hostname must route through Yarp so /_embr/blob/ is intercepted.
+  // x-forwarded-host points at the internal ADC sandbox proxy, not the public
+  // Embr domain, so we derive the origin from the browser's Referer/Origin
+  // header or an explicit EMBR_APP_URL env var.
+  const appUrl = process.env.EMBR_APP_URL          // explicit override
+    || req.headers.origin                            // set on cross-origin / POST
+    || extractOrigin(req.headers.referer)            // same-origin GET
+    || `${req.headers["x-forwarded-proto"] || req.protocol}://${req.headers["x-forwarded-host"] || req.get("host")}`;  // fallback
+
+  return `${appUrl}/_embr/blob/${path ?? ""}`;
+}
+
+/** Extract scheme+host from a full URL. */
+function extractOrigin(url) {
+  if (!url) return null;
+  try { return new URL(url).origin; } catch { return null; }
 }
 
 /** Standard headers for authenticated data-plane calls. */
@@ -44,19 +57,21 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/debug", (req, res) => {
-  const proto = req.headers["x-forwarded-proto"] || req.protocol;
-  const host = req.headers["x-forwarded-host"] || req.get("host");
+  const resolvedUrl = blobUrl(req, "");
   res.json({
     blobKeyLength: BLOB_KEY.length,
     blobKeyPrefix: BLOB_KEY.length > 4 ? BLOB_KEY.slice(0, 4) + "…" : "(empty)",
-    constructedBlobUrl: `${proto}://${host}/_embr/blob/`,
+    constructedBlobUrl: resolvedUrl,
     headers: {
       host: req.get("host"),
+      origin: req.headers.origin || null,
+      referer: req.headers.referer || null,
       "x-forwarded-host": req.headers["x-forwarded-host"] || null,
       "x-forwarded-proto": req.headers["x-forwarded-proto"] || null,
     },
     env: {
       PORT: process.env.PORT || "(default 3000)",
+      EMBR_APP_URL: process.env.EMBR_APP_URL || "(not set)",
       EMBR_BLOB_KEY_SET: !!process.env.EMBR_BLOB_KEY,
     },
   });
