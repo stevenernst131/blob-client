@@ -1,0 +1,6 @@
+version: 1
+platform: nodejs
+platformVersion: "24"
+run:
+  port: 3000
+  startCommand: node server.js
