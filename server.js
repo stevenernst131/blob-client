@@ -43,6 +43,25 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, blobKeyConfigured: BLOB_KEY.length > 0 });
 });
 
+app.get("/api/debug", (req, res) => {
+  const proto = req.headers["x-forwarded-proto"] || req.protocol;
+  const host = req.headers["x-forwarded-host"] || req.get("host");
+  res.json({
+    blobKeyLength: BLOB_KEY.length,
+    blobKeyPrefix: BLOB_KEY.length > 4 ? BLOB_KEY.slice(0, 4) + "…" : "(empty)",
+    constructedBlobUrl: `${proto}://${host}/_embr/blob/`,
+    headers: {
+      host: req.get("host"),
+      "x-forwarded-host": req.headers["x-forwarded-host"] || null,
+      "x-forwarded-proto": req.headers["x-forwarded-proto"] || null,
+    },
+    env: {
+      PORT: process.env.PORT || "(default 3000)",
+      EMBR_BLOB_KEY_SET: !!process.env.EMBR_BLOB_KEY,
+    },
+  });
+});
+
 // ---------------------------------------------------------------------------
 // List blobs  GET /api/blobs?prefix=&pageSize=&continuationToken=
 // ---------------------------------------------------------------------------
@@ -60,14 +79,17 @@ app.get("/api/blobs", async (req, res) => {
   const qsStr = qs.toString();
   const url = blobUrl(req, qsStr ? `?${qsStr}` : "");
 
+  console.log(`[list] → ${url}  (key length: ${BLOB_KEY.length})`);
+
   try {
     const upstream = await fetch(url, { headers: authHeaders() });
+    console.log(`[list] ← ${upstream.status} ${upstream.statusText}`);
     if (!upstream.ok) return await forwardError(upstream, res);
     const data = await upstream.json();
     res.json(data);
   } catch (err) {
     console.error("List blobs failed:", err.message);
-    res.status(502).json({ error: "Failed to list blobs" });
+    res.status(502).json({ error: `Failed to list blobs: ${err.message}` });
   }
 });
 
