@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Embr Blob Client</title>
+  <style>
+    /* ── Reset & base ────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f4f5f7; color: #1a1a1a; line-height: 1.5;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    .app      { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
+    h1        { font-size: 1.5rem; margin-bottom: .25rem; }
+    .subtitle { color: #666; font-size: .875rem; margin-bottom: 1.5rem; }
+    .card     { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem; }
+    .card h2  { font-size: 1rem; margin-bottom: .75rem; }
+
+    /* ── Upload form ─────────────────────────────────────────── */
+    .upload-row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; }
+    .upload-row label { display: flex; flex-direction: column; gap: .25rem; font-size: .8125rem; color: #444; }
+    .upload-row input[type="text"] {
+      padding: .4rem .6rem; border: 1px solid #ccc; border-radius: 4px; font-size: .875rem; min-width: 200px;
+    }
+    .upload-row input[type="file"] { font-size: .8125rem; }
+    .hint     { font-size: .75rem; color: #888; margin-top: .25rem; }
+
+    /* ── Buttons ──────────────────────────────────────────────── */
+    button {
+      padding: .4rem .85rem; border: none; border-radius: 4px; font-size: .8125rem;
+      cursor: pointer; transition: background .15s;
+    }
+    .btn-primary   { background: #0078d4; color: #fff; }
+    .btn-primary:hover { background: #106ebe; }
+    .btn-primary:disabled { background: #a0c4e8; cursor: default; }
+    .btn-danger    { background: #d13438; color: #fff; }
+    .btn-danger:hover { background: #a4262c; }
+    .btn-sm        { padding: .25rem .55rem; font-size: .75rem; }
+    .btn-ghost     { background: transparent; color: #0078d4; text-decoration: underline; }
+
+    /* ── Table ────────────────────────────────────────────────── */
+    table     { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+    th, td    { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid #eee; }
+    th        { font-weight: 600; color: #555; background: #fafafa; }
+    .actions  { display: flex; gap: .35rem; }
+    .empty    { color: #999; font-style: italic; padding: 1rem 0; text-align: center; }
+
+    /* ── Preview panel ───────────────────────────────────────── */
+    .preview-panel { display: none; }
+    .preview-panel.open { display: block; }
+    .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
+    .preview-header h2 { margin: 0; }
+    .preview-content img { max-width: 100%; border-radius: 4px; }
+    .preview-content pre {
+      background: #f6f8fa; border: 1px solid #e0e0e0; border-radius: 4px;
+      padding: 1rem; overflow-x: auto; font-size: .8125rem; max-height: 400px; overflow-y: auto;
+    }
+    .preview-content a { color: #0078d4; }
+
+    /* ── Messages ─────────────────────────────────────────────── */
+    .msg       { padding: .6rem .85rem; border-radius: 4px; font-size: .8125rem; margin-bottom: .75rem; display: none; }
+    .msg.error { background: #fde7e9; color: #a4262c; display: block; }
+    .msg.ok    { background: #dff6dd; color: #107c10; display: block; }
+
+    /* ── Spinner ──────────────────────────────────────────────── */
+    .spinner { display: inline-block; width: 1rem; height: 1rem; border: 2px solid #ccc; border-top-color: #0078d4; border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: .35rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>🔥 Embr Blob Client</h1>
+  <p class="subtitle">Load, preview, and manage static content stored in Embr blob storage.</p>
+
+  <!-- Messages -->
+  <div id="msg" class="msg"></div>
+
+  <!-- Upload -->
+  <div class="card">
+    <h2>Upload</h2>
+    <div class="upload-row">
+      <label>
+        File
+        <input type="file" id="fileInput" />
+      </label>
+      <label>
+        Blob key
+        <input type="text" id="keyInput" placeholder="images/logo.png" />
+      </label>
+      <button class="btn-primary" id="uploadBtn" disabled>Upload</button>
+    </div>
+    <p class="hint">Max 500 MB. Uploading to an existing key overwrites the blob.</p>
+  </div>
+
+  <!-- Blob list -->
+  <div class="card">
+    <h2>Blobs</h2>
+    <div id="blobList"></div>
+  </div>
+
+  <!-- Preview -->
+  <div class="card preview-panel" id="previewPanel">
+    <div class="preview-header">
+      <h2 id="previewTitle">Preview</h2>
+      <button class="btn-ghost btn-sm" id="closePreview">Close</button>
+    </div>
+    <div class="preview-content" id="previewContent"></div>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let blobs = [];
+
+// ---------------------------------------------------------------------------
+// DOM refs
+// ---------------------------------------------------------------------------
+const $msg            = document.getElementById("msg");
+const $fileInput      = document.getElementById("fileInput");
+const $keyInput       = document.getElementById("keyInput");
+const $uploadBtn      = document.getElementById("uploadBtn");
+const $blobList       = document.getElementById("blobList");
+const $previewPanel   = document.getElementById("previewPanel");
+const $previewTitle   = document.getElementById("previewTitle");
+const $previewContent = document.getElementById("previewContent");
+const $closePreview   = document.getElementById("closePreview");
+
+// ---------------------------------------------------------------------------
+// Messages
+// ---------------------------------------------------------------------------
+function showMsg(text, type = "error") {
+  $msg.textContent = text;
+  $msg.className = `msg ${type}`;
+  if (type === "ok") setTimeout(() => { $msg.className = "msg"; }, 4000);
+}
+function clearMsg() { $msg.className = "msg"; }
+
+// ---------------------------------------------------------------------------
+// Formatting helpers
+// ---------------------------------------------------------------------------
+function fmtBytes(n) {
+  if (n == null || n < 0) return "—";
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = n / 1024, i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v >= 10 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
+}
+
+function fmtDate(s) {
+  if (!s) return "—";
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : d.toLocaleString();
+}
+
+// ---------------------------------------------------------------------------
+// API helpers
+// ---------------------------------------------------------------------------
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    const text = await res.text();
+    let msg;
+    try { msg = JSON.parse(text).error; } catch { msg = text; }
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// List blobs
+// ---------------------------------------------------------------------------
+async function loadBlobs() {
+  $blobList.innerHTML = `<p><span class="spinner"></span> Loading…</p>`;
+  clearMsg();
+  try {
+    const data = await apiFetch("/api/blobs");
+    blobs = data.blobs || [];
+    renderBlobTable();
+  } catch (err) {
+    $blobList.innerHTML = "";
+    showMsg(`Failed to load blobs: ${err.message}`);
+  }
+}
+
+function renderBlobTable() {
+  if (blobs.length === 0) {
+    $blobList.innerHTML = `<p class="empty">No blobs yet. Upload something!</p>`;
+    return;
+  }
+
+  const rows = blobs.map((b, i) => `
+    <tr>
+      <td><button class="btn-ghost btn-sm" data-preview="${i}">${esc(b.key)}</button></td>
+      <td>${fmtBytes(b.sizeBytes)}</td>
+      <td>${esc(b.contentType || "—")}</td>
+      <td>${fmtDate(b.lastModified)}</td>
+      <td class="actions">
+        <button class="btn-primary btn-sm" data-download="${i}">Download</button>
+        <button class="btn-danger btn-sm" data-delete="${i}">Delete</button>
+      </td>
+    </tr>`).join("");
+
+  $blobList.innerHTML = `
+    <table>
+      <thead><tr><th>Key</th><th>Size</th><th>Type</th><th>Modified</th><th>Actions</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ---------------------------------------------------------------------------
+// Upload
+// ---------------------------------------------------------------------------
+$fileInput.addEventListener("change", () => {
+  const file = $fileInput.files[0];
+  if (file && !$keyInput.value) $keyInput.value = file.name;
+  $uploadBtn.disabled = !file;
+});
+
+$uploadBtn.addEventListener("click", async () => {
+  const file = $fileInput.files[0];
+  const key = $keyInput.value.trim();
+  if (!file || !key) return showMsg("Pick a file and enter a blob key.");
+
+  $uploadBtn.disabled = true;
+  $uploadBtn.textContent = "Uploading…";
+  clearMsg();
+
+  try {
+    await apiFetch(`/api/blobs/${encodeBlobKey(key)}`, {
+      method: "POST",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    showMsg(`Uploaded "${key}" ✓`, "ok");
+    $fileInput.value = "";
+    $keyInput.value = "";
+    await loadBlobs();
+  } catch (err) {
+    showMsg(`Upload failed: ${err.message}`);
+  } finally {
+    $uploadBtn.disabled = false;
+    $uploadBtn.textContent = "Upload";
+  }
+});
+
+function encodeBlobKey(key) {
+  return key.split("/").map(encodeURIComponent).join("/");
+}
+
+// ---------------------------------------------------------------------------
+// Download
+// ---------------------------------------------------------------------------
+function downloadBlob(blob) {
+  const url = `/_embr/blob/${encodeBlobKey(blob.key)}`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = blob.key.split("/").pop() || blob.key;
+  a.click();
+}
+
+// ---------------------------------------------------------------------------
+// Delete
+// ---------------------------------------------------------------------------
+async function deleteBlob(blob) {
+  if (!confirm(`Delete "${blob.key}"?`)) return;
+  clearMsg();
+  try {
+    await apiFetch(`/api/blobs/${encodeBlobKey(blob.key)}`, { method: "DELETE" });
+    showMsg(`Deleted "${blob.key}" ✓`, "ok");
+    closePreview();
+    await loadBlobs();
+  } catch (err) {
+    showMsg(`Delete failed: ${err.message}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Preview
+// ---------------------------------------------------------------------------
+function openPreview(blob) {
+  $previewTitle.textContent = blob.key;
+  $previewContent.innerHTML = "";
+  const url = `/_embr/blob/${encodeBlobKey(blob.key)}`;
+  const ct = (blob.contentType || "").toLowerCase();
+
+  if (ct.startsWith("image/")) {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = blob.key;
+    $previewContent.appendChild(img);
+  } else if (ct.startsWith("text/") || ct === "application/json" || ct === "application/xml") {
+    fetch(url).then(r => r.text()).then(text => {
+      const pre = document.createElement("pre");
+      pre.textContent = text;
+      $previewContent.appendChild(pre);
+    }).catch(() => {
+      $previewContent.innerHTML = `<p>Could not load preview.</p>`;
+    });
+  } else {
+    $previewContent.innerHTML = `
+      <p>No inline preview for <strong>${esc(ct || "unknown type")}</strong>.</p>
+      <p><a href="${url}" download>Download file</a></p>`;
+  }
+
+  $previewPanel.classList.add("open");
+}
+
+function closePreview() {
+  $previewPanel.classList.remove("open");
+  $previewContent.innerHTML = "";
+}
+
+$closePreview.addEventListener("click", closePreview);
+
+// ---------------------------------------------------------------------------
+// Delegated click handlers on blob table
+// ---------------------------------------------------------------------------
+$blobList.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-preview], button[data-download], button[data-delete]");
+  if (!btn) return;
+
+  const idx = parseInt(btn.dataset.preview ?? btn.dataset.download ?? btn.dataset.delete, 10);
+  const blob = blobs[idx];
+  if (!blob) return;
+
+  if (btn.dataset.preview !== undefined) openPreview(blob);
+  else if (btn.dataset.download !== undefined) downloadBlob(blob);
+  else if (btn.dataset.delete !== undefined) deleteBlob(blob);
+});
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+loadBlobs();
+</script>
+</body>
+</html>

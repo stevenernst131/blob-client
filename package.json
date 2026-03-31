@@ -1,0 +1,13 @@
+{
+  "name": "embr-blob-client",
+  "version": "1.0.0",
+  "description": "Sample app demonstrating Embr blob storage — load, preview, upload, and delete static content",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
