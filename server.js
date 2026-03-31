@@ -13,14 +13,14 @@ const BLOB_KEY = process.env.EMBR_BLOB_KEY || "";
 
 /** Build the absolute data-plane URL for a blob operation. */
 function blobUrl(req, path) {
-  // The public hostname must route through Yarp so /_embr/blob/ is intercepted.
-  // x-forwarded-host points at the internal ADC sandbox proxy, not the public
-  // Embr domain, so we derive the origin from the browser's Referer/Origin
-  // header or an explicit EMBR_APP_URL env var.
-  const appUrl = process.env.EMBR_APP_URL          // explicit override
-    || req.headers.origin                            // set on cross-origin / POST
-    || extractOrigin(req.headers.referer)            // same-origin GET
-    || `${req.headers["x-forwarded-proto"] || req.protocol}://${req.headers["x-forwarded-host"] || req.get("host")}`;  // fallback
+  // The frontend sends its own origin via X-Public-Origin because
+  // x-forwarded-host points at the internal ADC sandbox, not the public
+  // Embr domain that routes through Yarp.
+  const appUrl = process.env.EMBR_APP_URL
+    || req.headers["x-public-origin"]
+    || req.headers.origin
+    || extractOrigin(req.headers.referer)
+    || `${req.headers["x-forwarded-proto"] || req.protocol}://${req.headers["x-forwarded-host"] || req.get("host")}`;
 
   return `${appUrl}/_embr/blob/${path ?? ""}`;
 }

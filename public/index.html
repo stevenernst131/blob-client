@@ -161,7 +161,10 @@ function fmtDate(s) {
 // ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
+const PUBLIC_ORIGIN = window.location.origin;
+
 async function apiFetch(path, opts = {}) {
+  opts.headers = { ...opts.headers, "X-Public-Origin": PUBLIC_ORIGIN };
   const res = await fetch(path, opts);
   if (!res.ok) {
     const text = await res.text();
