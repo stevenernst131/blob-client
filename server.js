@@ -8,6 +8,15 @@ const PORT = process.env.PORT || 3000;
 const BLOB_KEY = process.env.EMBR_BLOB_KEY || "";
 
 // ---------------------------------------------------------------------------
+// Request logger — logs EVERY incoming request so we know what reaches Express
+// ---------------------------------------------------------------------------
+
+app.use((req, _res, next) => {
+  console.log(`[req] ${req.method} ${req.url}`);
+  next();
+});
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -203,7 +212,10 @@ app.delete("/api/blobs/*key", async (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.listen(PORT, () => {
-  console.log(`Blob client listening on http://localhost:${PORT}`);
+  console.log(`Blob client v4 listening on http://localhost:${PORT}`);
+  console.log(`  EMBR_BLOB_KEY: ${BLOB_KEY ? `set (${BLOB_KEY.length} chars)` : "NOT SET"}`);
+  console.log(`  EMBR_BLOB_URL: ${process.env.EMBR_BLOB_URL || "(not set)"}`);
+  console.log(`  EMBR_APP_HOSTNAME: ${process.env.EMBR_APP_HOSTNAME || "(not set)"}`);
   if (!BLOB_KEY) {
     console.warn("⚠  EMBR_BLOB_KEY is not set — blob operations will return 503");
   }
