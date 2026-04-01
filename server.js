@@ -12,10 +12,15 @@ const BLOB_KEY = process.env.EMBR_BLOB_KEY || "";
 // ---------------------------------------------------------------------------
 
 /** Build the absolute data-plane URL for a blob operation. */
-function blobUrl(req, path) {
-  // TEMPORARY: hardcoded for debugging — remove once origin discovery is fixed
-  const appUrl = "https://production-blob-client-80d23f45.sterns.app.embr-test.windows-int.net";
-  return `${appUrl}/_embr/blob/${path ?? ""}`;
+function blobUrl(_req, path) {
+  const appUrl = process.env.EMBR_BLOB_URL
+    || (process.env.EMBR_APP_HOSTNAME ? `https://${process.env.EMBR_APP_HOSTNAME}/_embr/blob` : null)
+    || "http://localhost:3000/_embr/blob";
+
+  // Normalize: ensure base ends without slash, path starts without slash
+  const base = appUrl.replace(/\/+$/, "");
+  const suffix = (path ?? "").replace(/^\/+/, "");
+  return suffix ? `${base}/${suffix}` : `${base}/`;
 }
 
 /** Extract scheme+host from a full URL. */
@@ -55,16 +60,10 @@ app.get("/api/debug", (req, res) => {
     blobKeyLength: BLOB_KEY.length,
     blobKeyPrefix: BLOB_KEY.length > 4 ? BLOB_KEY.slice(0, 4) + "…" : "(empty)",
     constructedBlobUrl: resolvedUrl,
-    headers: {
-      host: req.get("host"),
-      origin: req.headers.origin || null,
-      referer: req.headers.referer || null,
-      "x-forwarded-host": req.headers["x-forwarded-host"] || null,
-      "x-forwarded-proto": req.headers["x-forwarded-proto"] || null,
-    },
     env: {
       PORT: process.env.PORT || "(default 3000)",
-      EMBR_APP_URL: process.env.EMBR_APP_URL || "(not set)",
+      EMBR_BLOB_URL: process.env.EMBR_BLOB_URL || "(not set)",
+      EMBR_APP_HOSTNAME: process.env.EMBR_APP_HOSTNAME || "(not set)",
       EMBR_BLOB_KEY_SET: !!process.env.EMBR_BLOB_KEY,
     },
   });

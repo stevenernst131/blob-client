@@ -78,6 +78,12 @@
   <!-- Messages -->
   <div id="msg" class="msg"></div>
 
+  <!-- Config info banner -->
+  <div class="card" id="configCard">
+    <h2>Configuration</h2>
+    <div id="configInfo"><span class="spinner"></span> Loading…</div>
+  </div>
+
   <!-- Upload -->
   <div class="card">
     <h2>Upload</h2>
@@ -97,7 +103,10 @@
 
   <!-- Blob list -->
   <div class="card">
-    <h2>Blobs</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2>Blobs</h2>
+      <button class="btn-primary btn-sm" id="refreshBtn">↻ Refresh</button>
+    </div>
     <div id="blobList"></div>
   </div>
 
@@ -328,6 +337,8 @@ function closePreview() {
 
 $closePreview.addEventListener("click", closePreview);
 
+document.getElementById("refreshBtn").addEventListener("click", loadBlobs);
+
 // ---------------------------------------------------------------------------
 // Delegated click handlers on blob table
 // ---------------------------------------------------------------------------
@@ -345,8 +356,30 @@ $blobList.addEventListener("click", (e) => {
 });
 
 // ---------------------------------------------------------------------------
+// Config banner
+// ---------------------------------------------------------------------------
+async function loadConfig() {
+  const $info = document.getElementById("configInfo");
+  try {
+    const data = await apiFetch("/api/debug");
+    const rows = [
+      ["EMBR_BLOB_URL", data.env.EMBR_BLOB_URL],
+      ["EMBR_APP_HOSTNAME", data.env.EMBR_APP_HOSTNAME],
+      ["EMBR_BLOB_KEY", data.blobKeyLength > 0 ? `set (${data.blobKeyPrefix}, ${data.blobKeyLength} chars)` : "⚠ not set"],
+      ["Resolved blob URL", data.constructedBlobUrl],
+    ];
+    $info.innerHTML = `<table>${rows.map(([k, v]) =>
+      `<tr><td style="font-weight:600;padding-right:1rem">${esc(k)}</td><td><code>${esc(v)}</code></td></tr>`
+    ).join("")}</table>`;
+  } catch (err) {
+    $info.innerHTML = `<span style="color:#a4262c">Failed to load config: ${esc(err.message)}</span>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
+loadConfig();
 loadBlobs();
 </script>
 </body>
