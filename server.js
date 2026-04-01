@@ -138,7 +138,7 @@ app.post("/api/blobs/*key", async (req, res) => {
     return res.status(503).json({ error: "EMBR_BLOB_KEY is not configured" });
   }
 
-  const key = req.params.key;
+  const key = Array.isArray(req.params.key) ? req.params.key.join("/") : req.params.key;
   if (!key) {
     return res.status(400).json({ error: "Blob key is required" });
   }
@@ -177,7 +177,7 @@ app.delete("/api/blobs/*key", async (req, res) => {
     return res.status(503).json({ error: "EMBR_BLOB_KEY is not configured" });
   }
 
-  const key = req.params.key;
+  const key = Array.isArray(req.params.key) ? req.params.key.join("/") : req.params.key;
   if (!key) {
     return res.status(400).json({ error: "Blob key is required" });
   }
