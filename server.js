@@ -94,15 +94,36 @@ app.get("/api/blobs", async (req, res) => {
   const url = blobUrl(req, qsStr ? `?${qsStr}` : "");
 
   console.log(`[list] → ${url}  (key length: ${BLOB_KEY.length})`);
+  console.log(`[list] headers: ${JSON.stringify(authHeaders())}`);
 
   try {
     const upstream = await fetch(url, { headers: authHeaders() });
+    const responseHeaders = Object.fromEntries(upstream.headers.entries());
     console.log(`[list] ← ${upstream.status} ${upstream.statusText}`);
-    if (!upstream.ok) return await forwardError(upstream, res);
-    const data = await upstream.json();
+    console.log(`[list] response headers: ${JSON.stringify(responseHeaders)}`);
+
+    if (!upstream.ok) {
+      const errorBody = await upstream.text();
+      console.error(`[list] error body: ${errorBody}`);
+      res.status(upstream.status).type("text/plain").send(errorBody);
+      return;
+    }
+
+    const rawBody = await upstream.text();
+    console.log(`[list] response body: ${rawBody}`);
+
+    let data;
+    try { data = JSON.parse(rawBody); } catch (e) {
+      console.error(`[list] failed to parse JSON: ${e.message}`);
+      return res.status(502).json({ error: "Invalid JSON from upstream", raw: rawBody.slice(0, 500) });
+    }
+
+    console.log(`[list] blob count: ${data.count}, keys: ${(data.blobs || []).map(b => b.key).join(", ")}`);
+    if (data.continuationToken) console.log(`[list] continuationToken: ${data.continuationToken}`);
+
     res.json(data);
   } catch (err) {
-    console.error("List blobs failed:", err.message);
+    console.error(`[list] fetch error: ${err.message}\n${err.stack}`);
     res.status(502).json({ error: `Failed to list blobs: ${err.message}` });
   }
 });
