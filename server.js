@@ -13,12 +13,19 @@ const BLOB_KEY = process.env.EMBR_BLOB_KEY || "";
 
 /** Build the absolute data-plane URL for a blob operation. */
 function blobUrl(_req, path) {
-  const appUrl = process.env.EMBR_BLOB_URL
-    || (process.env.EMBR_APP_HOSTNAME ? `https://${process.env.EMBR_APP_HOSTNAME}/_embr/blob` : null)
-    || "http://localhost:3000/_embr/blob";
+  let base;
+  if (process.env.EMBR_BLOB_URL) {
+    // EMBR_BLOB_URL may lack a scheme — ensure it starts with https://
+    const raw = process.env.EMBR_BLOB_URL;
+    base = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+  } else if (process.env.EMBR_APP_HOSTNAME) {
+    base = `https://${process.env.EMBR_APP_HOSTNAME}/_embr/blob`;
+  } else {
+    base = "http://localhost:3000/_embr/blob";
+  }
 
-  // Normalize: ensure base ends without slash, path starts without slash
-  const base = appUrl.replace(/\/+$/, "");
+  // Normalize: strip trailing slashes, then append path
+  base = base.replace(/\/+$/, "");
   const suffix = (path ?? "").replace(/^\/+/, "");
   return suffix ? `${base}/${suffix}` : `${base}/`;
 }
