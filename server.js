@@ -24,9 +24,7 @@ app.use((req, _res, next) => {
 function blobUrl(_req, path) {
   let base;
   if (process.env.EMBR_BLOB_URL) {
-    // EMBR_BLOB_URL may lack a scheme — ensure it starts with https://
-    const raw = process.env.EMBR_BLOB_URL;
-    base = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+    base = process.env.EMBR_BLOB_URL;
   } else if (process.env.EMBR_APP_HOSTNAME) {
     base = `https://${process.env.EMBR_APP_HOSTNAME}/_embr/blob`;
   } else {
