@@ -65,7 +65,7 @@ app.use(express.static(join(__dirname, "public")));
 // ---------------------------------------------------------------------------
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, blobKeyConfigured: BLOB_KEY.length > 0 });
+  res.json({ ok: true, blobKeyConfigured: BLOB_KEY.length > 0, cliTestBranch: true, version: "1.0.1-cli-test" });
 });
 
 app.get("/api/debug", (req, res) => {
