@@ -375,11 +375,12 @@ async function loadConfig() {
     if (data.embrDependencies && data.embrDependencies.length > 0) {
       html += `<h3 style="margin-top:1rem;margin-bottom:.5rem;font-size:.875rem">embr.yaml Dependencies</h3>`;
       html += `<table>
-        <thead><tr><th>Name</th><th>Env Var</th><th>Description</th><th>Required</th><th>Status</th></tr></thead>
+        <thead><tr><th>Name</th><th>Env Var</th><th>Value</th><th>Description</th><th>Required</th><th>Status</th></tr></thead>
         <tbody>${data.embrDependencies.map(dep =>
           `<tr>
             <td>${esc(dep.name)}</td>
             <td><code>${esc(dep.envVar)}</code></td>
+            <td><code>${dep.value ? esc(dep.value) : '<span style="color:#999">—</span>'}</code></td>
             <td>${esc(dep.description)}</td>
             <td>${dep.required ? "Yes" : "No"}</td>
             <td>${dep.isSet

@@ -20,6 +20,7 @@ try {
     required: !!dep.required,
     isSecret: !!dep.isSecret,
     isSet: !!process.env[dep.envVar],
+    value: process.env[dep.envVar] || "",
   }));
 } catch (err) {
   console.warn("Could not load embr.yaml dependencies:", err.message);
