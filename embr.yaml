@@ -1,0 +1,13 @@
+version: 1
+platform: nodejs
+platformVersion: "24"
+run:
+  port: 3000
+  startCommand: node server.js
+
+dependencies:
+  - name: "api-key"
+    envVar: "EXTERNAL_API_KEY"
+    description: "Third-party API key"
+    required: true
+    isSecret: true
