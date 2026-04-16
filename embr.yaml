@@ -6,23 +6,13 @@ run:
   startCommand: node server.js
 
 dependencies:
-  - name: "api-key"
-    envVar: "EXTERNAL_API_KEY"
+  - name: "per-env-key"
+    envVar: "PER_ENV_KEY"
     description: "Third-party API key"
     required: true
     isSecret: true
-  - name: "api-key2"
-    envVar: "EXTERNAL_API_KEY2"
-    description: "Third-party API key"
-    required: true
-    isSecret: true
-  - name: "api-key3"
-    envVar: "EXTERNAL_API_KEY3"
-    description: "Third-party API key"
-    required: true
-    isSecret: true
-  - name: "api-key4"
-    envVar: "EXTERNAL_API_KEY4"
+  - name: "shared-key"
+    envVar: "SHARED_KEY"
     description: "Third-party API key"
     required: true
     isSecret: true
