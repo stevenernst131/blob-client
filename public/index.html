@@ -368,9 +368,29 @@ async function loadConfig() {
       ["EMBR_BLOB_KEY", data.blobKeyLength > 0 ? `set (${data.blobKeyPrefix}, ${data.blobKeyLength} chars)` : "⚠ not set"],
       ["Resolved blob URL", data.constructedBlobUrl],
     ];
-    $info.innerHTML = `<table>${rows.map(([k, v]) =>
+    let html = `<table>${rows.map(([k, v]) =>
       `<tr><td style="font-weight:600;padding-right:1rem">${esc(k)}</td><td><code>${esc(v)}</code></td></tr>`
     ).join("")}</table>`;
+
+    if (data.embrDependencies && data.embrDependencies.length > 0) {
+      html += `<h3 style="margin-top:1rem;margin-bottom:.5rem;font-size:.875rem">embr.yaml Dependencies</h3>`;
+      html += `<table>
+        <thead><tr><th>Name</th><th>Env Var</th><th>Description</th><th>Required</th><th>Status</th></tr></thead>
+        <tbody>${data.embrDependencies.map(dep =>
+          `<tr>
+            <td>${esc(dep.name)}</td>
+            <td><code>${esc(dep.envVar)}</code></td>
+            <td>${esc(dep.description)}</td>
+            <td>${dep.required ? "Yes" : "No"}</td>
+            <td>${dep.isSet
+              ? '<span style="color:#107c10">✓ set</span>'
+              : '<span style="color:#a4262c">⚠ not set</span>'}</td>
+          </tr>`
+        ).join("")}</tbody>
+      </table>`;
+    }
+
+    $info.innerHTML = html;
   } catch (err) {
     $info.innerHTML = `<span style="color:#a4262c">Failed to load config: ${esc(err.message)}</span>`;
   }
