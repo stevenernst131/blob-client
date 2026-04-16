@@ -12,12 +12,17 @@ dependencies:
     required: true
     isSecret: true
   - name: "api-key2"
-    envVar: "EXTERNAL_API_KEY"
+    envVar: "EXTERNAL_API_KEY2"
     description: "Third-party API key"
     required: true
     isSecret: true
   - name: "api-key3"
-    envVar: "EXTERNAL_API_KEY"
+    envVar: "EXTERNAL_API_KEY3"
+    description: "Third-party API key"
+    required: true
+    isSecret: true
+  - name: "api-key4"
+    envVar: "EXTERNAL_API_KEY4"
     description: "Third-party API key"
     required: true
     isSecret: true

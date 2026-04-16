@@ -1,11 +1,30 @@
 import express from "express";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { readFileSync } from "fs";
+import yaml from "js-yaml";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BLOB_KEY = process.env.EMBR_BLOB_KEY || "";
+
+// Load embr.yaml dependencies once at startup
+let embrDependencies = [];
+try {
+  const embrConfig = yaml.load(readFileSync(join(__dirname, "embr.yaml"), "utf8"));
+  embrDependencies = (embrConfig?.dependencies || []).map((dep) => ({
+    name: dep.name,
+    envVar: dep.envVar,
+    description: dep.description || "",
+    required: !!dep.required,
+    isSecret: !!dep.isSecret,
+    isSet: !!process.env[dep.envVar],
+    value: process.env[dep.envVar] || "",
+  }));
+} catch (err) {
+  console.warn("Could not load embr.yaml dependencies:", err.message);
+}
 
 // ---------------------------------------------------------------------------
 // Request logger — logs EVERY incoming request so we know what reaches Express
@@ -80,6 +99,7 @@ app.get("/api/debug", (req, res) => {
       EMBR_APP_HOSTNAME: process.env.EMBR_APP_HOSTNAME || "(not set)",
       EMBR_BLOB_KEY_SET: !!process.env.EMBR_BLOB_KEY,
     },
+    embrDependencies,
   });
 });
 
