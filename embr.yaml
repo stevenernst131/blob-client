@@ -11,3 +11,13 @@ dependencies:
     description: "Third-party API key"
     required: true
     isSecret: true
+  - name: "api-key2"
+    envVar: "EXTERNAL_API_KEY"
+    description: "Third-party API key"
+    required: true
+    isSecret: true
+  - name: "api-key3"
+    envVar: "EXTERNAL_API_KEY"
+    description: "Third-party API key"
+    required: true
+    isSecret: true
