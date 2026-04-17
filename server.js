@@ -3,24 +3,68 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { readFileSync } from "fs";
 import yaml from "js-yaml";
+import pg from "pg";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BLOB_KEY = process.env.EMBR_BLOB_KEY || "";
+const DATABASE_URL = process.env.DATABASE_URL || "";
+
+// ---------------------------------------------------------------------------
+// Postgres setup
+// ---------------------------------------------------------------------------
+let pool = null;
+let dbStatus = { connected: false, error: null, tableReady: false };
+
+async function initDb() {
+  if (!DATABASE_URL) {
+    dbStatus.error = "DATABASE_URL not set";
+    console.warn("⚠  DATABASE_URL is not set — database features disabled");
+    return;
+  }
+
+  try {
+    pool = new pg.Pool({ connectionString: DATABASE_URL, max: 5, ssl: { rejectUnauthorized: false } });
+    const client = await pool.connect();
+    await client.query("SELECT 1");
+    dbStatus.connected = true;
+    console.log("✅ Connected to PostgreSQL");
+
+    // Create notes table if not exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notes (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    dbStatus.tableReady = true;
+    console.log("✅ Notes table ready");
+    client.release();
+  } catch (err) {
+    dbStatus.error = err.message;
+    console.error("❌ PostgreSQL connection failed:", err.message);
+  }
+}
 
 // Load embr.yaml dependencies once at startup
 let embrDependencies = [];
 try {
   const embrConfig = yaml.load(readFileSync(join(__dirname, "embr.yaml"), "utf8"));
-  embrDependencies = (embrConfig?.dependencies || []).map((dep) => ({
-    name: dep.name,
-    envVar: dep.envVar,
+  const deps = embrConfig?.dependencies || {};
+  embrDependencies = Object.entries(deps).map(([name, dep]) => ({
+    name,
+    type: dep.type || "external",
     description: dep.description || "",
     required: !!dep.required,
-    isSecret: !!dep.isSecret,
-    isSet: !!process.env[dep.envVar],
-    value: process.env[dep.envVar] || "",
+    provides: (dep.provides || []).map((p) => ({
+      envVar: p.name,
+      secret: p.secret !== false,
+      isSet: !!process.env[p.name],
+      value: process.env[p.name] || "",
+    })),
   }));
 } catch (err) {
   console.warn("Could not load embr.yaml dependencies:", err.message);
@@ -100,7 +144,59 @@ app.get("/api/debug", (req, res) => {
       EMBR_BLOB_KEY_SET: !!process.env.EMBR_BLOB_KEY,
     },
     embrDependencies,
+    dbStatus,
   });
+});
+
+// ---------------------------------------------------------------------------
+// Notes API (PostgreSQL-backed)
+// ---------------------------------------------------------------------------
+
+app.use(express.json());
+
+app.get("/api/db/status", (_req, res) => {
+  res.json(dbStatus);
+});
+
+app.get("/api/notes", async (_req, res) => {
+  if (!pool || !dbStatus.tableReady) {
+    return res.status(503).json({ error: "Database not available", dbStatus });
+  }
+  try {
+    const result = await pool.query("SELECT * FROM notes ORDER BY created_at DESC LIMIT 50");
+    res.json({ notes: result.rows, count: result.rows.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/notes", async (req, res) => {
+  if (!pool || !dbStatus.tableReady) {
+    return res.status(503).json({ error: "Database not available", dbStatus });
+  }
+  const { title, content } = req.body;
+  if (!title) return res.status(400).json({ error: "title is required" });
+  try {
+    const result = await pool.query(
+      "INSERT INTO notes (title, content) VALUES ($1, $2) RETURNING *",
+      [title, content || ""]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/notes/:id", async (req, res) => {
+  if (!pool || !dbStatus.tableReady) {
+    return res.status(503).json({ error: "Database not available", dbStatus });
+  }
+  try {
+    await pool.query("DELETE FROM notes WHERE id = $1", [req.params.id]);
+    res.status(204).end();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -229,12 +325,15 @@ app.delete("/api/blobs/*key", async (req, res) => {
 // Start
 // ---------------------------------------------------------------------------
 
-app.listen(PORT, () => {
-  console.log(`Blob client v4 listening on http://localhost:${PORT}`);
-  console.log(`  EMBR_BLOB_KEY: ${BLOB_KEY ? `set (${BLOB_KEY.length} chars)` : "NOT SET"}`);
-  console.log(`  EMBR_BLOB_URL: ${process.env.EMBR_BLOB_URL || "(not set)"}`);
-  console.log(`  EMBR_APP_HOSTNAME: ${process.env.EMBR_APP_HOSTNAME || "(not set)"}`);
-  if (!BLOB_KEY) {
-    console.warn("⚠  EMBR_BLOB_KEY is not set — blob operations will return 503");
-  }
+initDb().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Blob client v5 listening on http://localhost:${PORT}`);
+    console.log(`  EMBR_BLOB_KEY: ${BLOB_KEY ? `set (${BLOB_KEY.length} chars)` : "NOT SET"}`);
+    console.log(`  EMBR_BLOB_URL: ${process.env.EMBR_BLOB_URL || "(not set)"}`);
+    console.log(`  EMBR_APP_HOSTNAME: ${process.env.EMBR_APP_HOSTNAME || "(not set)"}`);
+    console.log(`  DATABASE_URL: ${DATABASE_URL ? "set" : "NOT SET"}`);
+    if (!BLOB_KEY) {
+      console.warn("⚠  EMBR_BLOB_KEY is not set — blob operations will return 503");
+    }
+  });
 });

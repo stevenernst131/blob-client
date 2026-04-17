@@ -20,3 +20,13 @@ dependencies:
     provides:
       - name: SHARED_KEY
         secret: true
+  app-database:
+    type: postgres
+    description: "Main application database for notes"
+    required: true
+    provides:
+      - name: DATABASE_URL
+        secret: true
+        scope: runtime
+    postgres:
+      framework: raw

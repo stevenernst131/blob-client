@@ -84,6 +84,30 @@
     <div id="configInfo"><span class="spinner"></span> Loading…</div>
   </div>
 
+  <!-- Database status + Notes -->
+  <div class="card" id="dbCard">
+    <h2>🐘 Database (PostgreSQL)</h2>
+    <div id="dbStatus"><span class="spinner"></span> Checking connection…</div>
+    <div id="notesSection" style="display:none;margin-top:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <h3 style="font-size:.875rem;margin:0">Notes</h3>
+        <button class="btn-primary btn-sm" id="refreshNotes">↻ Refresh</button>
+      </div>
+      <div class="upload-row" style="margin-bottom:.75rem">
+        <label>
+          Title
+          <input type="text" id="noteTitle" placeholder="My note" />
+        </label>
+        <label>
+          Content
+          <input type="text" id="noteContent" placeholder="Some content..." style="min-width:280px" />
+        </label>
+        <button class="btn-primary" id="addNoteBtn">Add Note</button>
+      </div>
+      <div id="notesList"></div>
+    </div>
+  </div>
+
   <!-- Upload -->
   <div class="card">
     <h2>Upload</h2>
@@ -231,6 +255,10 @@ function esc(s) {
   d.textContent = s;
   return d.innerHTML;
 }
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString();
+}
 
 // ---------------------------------------------------------------------------
 // Upload
@@ -356,7 +384,92 @@ $blobList.addEventListener("click", (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Config banner
+// Database status + Notes
+// ---------------------------------------------------------------------------
+async function loadDbStatus() {
+  const $status = document.getElementById("dbStatus");
+  const $notes = document.getElementById("notesSection");
+  try {
+    const data = await apiFetch("/api/db/status");
+    if (data.connected && data.tableReady) {
+      $status.innerHTML = `<span style="color:#107c10">✅ Connected to PostgreSQL — table ready</span>`;
+      $notes.style.display = "block";
+      loadNotes();
+    } else if (data.connected) {
+      $status.innerHTML = `<span style="color:#d4a017">⚠ Connected but table not ready</span>`;
+    } else {
+      $status.innerHTML = `<span style="color:#a4262c">❌ Not connected: ${esc(data.error || "unknown")}</span>`;
+    }
+  } catch (err) {
+    $status.innerHTML = `<span style="color:#a4262c">❌ ${esc(err.message)}</span>`;
+  }
+}
+
+async function loadNotes() {
+  const $list = document.getElementById("notesList");
+  $list.innerHTML = `<p><span class="spinner"></span> Loading notes…</p>`;
+  try {
+    const data = await apiFetch("/api/notes");
+    const notes = data.notes || [];
+    if (notes.length === 0) {
+      $list.innerHTML = `<p class="empty">No notes yet. Add one above!</p>`;
+      return;
+    }
+    const rows = notes.map(n => `
+      <tr>
+        <td>${esc(String(n.id))}</td>
+        <td><strong>${esc(n.title)}</strong></td>
+        <td>${esc(n.content || "—")}</td>
+        <td>${fmtDate(n.created_at)}</td>
+        <td><button class="btn-danger btn-sm" data-delete-note="${n.id}">Delete</button></td>
+      </tr>`).join("");
+    $list.innerHTML = `<table>
+      <thead><tr><th>ID</th><th>Title</th><th>Content</th><th>Created</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  } catch (err) {
+    $list.innerHTML = `<span style="color:#a4262c">${esc(err.message)}</span>`;
+  }
+}
+
+document.getElementById("addNoteBtn").addEventListener("click", async () => {
+  const title = document.getElementById("noteTitle").value.trim();
+  const content = document.getElementById("noteContent").value.trim();
+  if (!title) return showMsg("Note title is required.");
+  clearMsg();
+  try {
+    await apiFetch("/api/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, content }),
+    });
+    document.getElementById("noteTitle").value = "";
+    document.getElementById("noteContent").value = "";
+    showMsg("Note added ✓", "ok");
+    loadNotes();
+  } catch (err) {
+    showMsg(`Failed to add note: ${err.message}`);
+  }
+});
+
+document.getElementById("refreshNotes").addEventListener("click", loadNotes);
+
+document.getElementById("notesList").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-delete-note]");
+  if (!btn) return;
+  const id = btn.dataset.deleteNote;
+  if (!confirm(`Delete note #${id}?`)) return;
+  try {
+    await apiFetch(`/api/notes/${id}`, { method: "DELETE" });
+    showMsg("Note deleted ✓", "ok");
+    loadNotes();
+  } catch (err) {
+    showMsg(`Failed to delete note: ${err.message}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Config banner — updated for map-based deps
 // ---------------------------------------------------------------------------
 async function loadConfig() {
   const $info = document.getElementById("configInfo");
@@ -375,17 +488,17 @@ async function loadConfig() {
     if (data.embrDependencies && data.embrDependencies.length > 0) {
       html += `<h3 style="margin-top:1rem;margin-bottom:.5rem;font-size:.875rem">embr.yaml Dependencies</h3>`;
       html += `<table>
-        <thead><tr><th>Name</th><th>Env Var</th><th>Value</th><th>Description</th><th>Required</th><th>Status</th></tr></thead>
+        <thead><tr><th>Name</th><th>Type</th><th>Env Vars</th><th>Description</th><th>Required</th><th>Status</th></tr></thead>
         <tbody>${data.embrDependencies.map(dep =>
           `<tr>
             <td>${esc(dep.name)}</td>
-            <td><code>${esc(dep.envVar)}</code></td>
-            <td><code>${dep.value ? esc(dep.value) : '<span style="color:#999">—</span>'}</code></td>
+            <td><code>${esc(dep.type)}</code></td>
+            <td>${dep.provides.map(p => `<code>${esc(p.envVar)}</code>`).join(", ")}</td>
             <td>${esc(dep.description)}</td>
             <td>${dep.required ? "Yes" : "No"}</td>
-            <td>${dep.isSet
-              ? '<span style="color:#107c10">✓ set</span>'
-              : '<span style="color:#a4262c">⚠ not set</span>'}</td>
+            <td>${dep.provides.every(p => p.isSet)
+              ? '<span style="color:#107c10">✓ all set</span>'
+              : '<span style="color:#a4262c">⚠ missing vars</span>'}</td>
           </tr>`
         ).join("")}</tbody>
       </table>`;
@@ -402,6 +515,7 @@ async function loadConfig() {
 // ---------------------------------------------------------------------------
 loadConfig();
 loadBlobs();
+loadDbStatus();
 </script>
 </body>
 </html>
